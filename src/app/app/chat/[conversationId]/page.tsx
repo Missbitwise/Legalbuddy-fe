@@ -22,6 +22,7 @@ export default function ActiveChatPage({
     error,
     fetchConversationById,
     sendMessage,
+    editAndResendMessage,
   } = useConversationsStore();
 
   useEffect(() => {
@@ -60,6 +61,7 @@ export default function ActiveChatPage({
       <ChatWindow
         messages={activeConversation?.messages || []}
         isSending={isSending}
+        onEditAndResend={editAndResendMessage}
       />
       <ChatComposer onSend={handleSend} isSending={isSending} />
     </div>
