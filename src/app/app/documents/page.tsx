@@ -1,14 +1,35 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { FileText, Upload, Database, ShieldCheck, Scale, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { DocumentUploadModal } from "@/components/legal/DocumentUploadModal";
+import { useAuthStore } from "@/hooks/useAuth";
+import { Spinner } from "@/components/ui/Spinner";
 
 export default function DocumentsPage() {
+  const router = useRouter();
+  const { user, isInitializing } = useAuthStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const isAdmin = user?.role === "ADMIN" || user?.email?.toLowerCase() === "urmilarajapurkar953@gmail.com";
+
+  useEffect(() => {
+    if (!isInitializing && user && !isAdmin) {
+      router.replace("/app");
+    }
+  }, [isInitializing, user, isAdmin, router]);
+
+  if (isInitializing || !isAdmin) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center space-y-3">
+        <Spinner size="lg" className="text-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto p-4 sm:p-8 custom-scrollbar space-y-8 max-w-5xl mx-auto w-full">
