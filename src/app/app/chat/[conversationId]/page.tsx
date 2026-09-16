@@ -35,21 +35,33 @@ export default function ActiveChatPage({
     await sendMessage(text, conversationId);
   };
 
-  if (isLoadingChat) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center space-y-3">
-        <Spinner size="lg" className="text-blue-500" />
-        <p className="text-xs text-slate-400 font-medium">Loading legal conversation history...</p>
-      </div>
-    );
-  }
+  // Only show the full-page loader when we don't have
+  // a conversation to display yet.
+ const isCurrentConversationLoaded =
+  activeConversation?.id === conversationId;
+
+if (isLoadingChat && !isCurrentConversationLoaded) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center space-y-3">
+      <Spinner size="lg" className="text-blue-500" />
+
+      <p className="text-xs text-slate-400 font-medium">
+        Loading legal conversation history...
+      </p>
+    </div>
+  );
+}
 
   if (error && !activeConversation) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
         <div className="p-4 rounded-2xl bg-red-500/10 text-red-500 max-w-md space-y-2 border border-red-500/20">
           <AlertCircle className="w-8 h-8 mx-auto" />
-          <h3 className="font-semibold text-sm">Conversation Error</h3>
+
+          <h3 className="font-semibold text-sm">
+            Conversation Error
+          </h3>
+
           <p className="text-xs">{error}</p>
         </div>
       </div>
@@ -63,7 +75,11 @@ export default function ActiveChatPage({
         isSending={isSending}
         onEditAndResend={editAndResendMessage}
       />
-      <ChatComposer onSend={handleSend} isSending={isSending} />
+
+      <ChatComposer
+        onSend={handleSend}
+        isSending={isSending}
+      />
     </div>
   );
 }

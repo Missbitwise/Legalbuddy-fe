@@ -15,6 +15,7 @@ interface ConversationsState {
 
   fetchConversations: () => Promise<void>;
   fetchConversationById: (id: string) => Promise<void>;
+  refreshActiveConversationSilently: (id: string) => Promise<void>;
   createNewConversation: (title?: string) => Promise<Conversation>;
   sendMessage: (content: string, conversationId?: string) => Promise<string>;
   editAndResendMessage: (messageId: string, content: string) => Promise<void>;
@@ -33,25 +34,42 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
 
   fetchConversations: async () => {
     set({ isLoadingList: true, error: null });
+
     try {
       const res = await conversationApi.getAll();
-      set({ conversations: res.conversations, isLoadingList: false });
+
+      set({
+        conversations: res.conversations,
+        isLoadingList: false,
+      });
     } catch (err: any) {
       set({
-        error: err.response?.data?.message || "Failed to load conversation history.",
+        error:
+          err.response?.data?.message ||
+          "Failed to load conversation history.",
         isLoadingList: false,
       });
     }
   },
 
   fetchConversationById: async (id: string) => {
-    set({ isLoadingChat: true, error: null });
+    set({
+      isLoadingChat: true,
+      error: null,
+    });
+
     try {
       const res = await conversationApi.getOne(id);
-      set({ activeConversation: res.conversation, isLoadingChat: false });
+
+      set({
+        activeConversation: res.conversation,
+        isLoadingChat: false,
+      });
     } catch (err: any) {
       set({
-        error: err.response?.data?.message || "Failed to load conversation details.",
+        error:
+          err.response?.data?.message ||
+          "Failed to load conversation details.",
         isLoadingChat: false,
       });
     }
@@ -59,24 +77,40 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
 
   createNewConversation: async (title?: string) => {
     set({ error: null });
+
     try {
       const res = await conversationApi.create({ title });
+
       const newConv = res.conversation;
+
       set((state) => ({
         conversations: [newConv, ...state.conversations],
-        activeConversation: { ...newConv, messages: [] },
+        activeConversation: {
+          ...newConv,
+          messages: [],
+        },
       }));
+
       return newConv;
     } catch (err: any) {
-      const msg = err.response?.data?.message || "Failed to create conversation.";
+      const msg =
+        err.response?.data?.message ||
+        "Failed to create conversation.";
+
       set({ error: msg });
+
       throw new Error(msg);
     }
   },
 
-  sendMessage: async (content: string, targetConvId?: string) => {
+  sendMessage: async (
+    content: string,
+    targetConvId?: string
+  ) => {
     const activeConv = get().activeConversation;
-    const currentConvId = targetConvId || activeConv?.id;
+
+    const currentConvId =
+      targetConvId || activeConv?.id;
 
     const tempUserMsg: Message = {
       id: `temp-${Date.now()}`,
@@ -86,20 +120,26 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
       createdAt: new Date().toISOString(),
     };
 
-    // Optimistically add user message to active conversation
+    // Immediately show the user's message
     if (activeConv) {
       set({
         activeConversation: {
           ...activeConv,
-          messages: [...(activeConv.messages || []), tempUserMsg],
+          messages: [
+            ...(activeConv.messages || []),
+            tempUserMsg,
+          ],
         },
       });
     }
 
-    set({ isSending: true, error: null });
+    // Only use isSending for the AI response
+    set({
+      isSending: true,
+      error: null,
+    });
 
     try {
-      // Send question to RAG AI endpoint
       const aiResult = await aiApi.ask({
         question: content,
         conversationId: currentConvId,
@@ -116,41 +156,94 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
         createdAt: new Date().toISOString(),
       };
 
-      // Refresh list to keep sidebar updated
-      get().fetchConversations();
+      // Update the active conversation locally.
+      // Do NOT call fetchConversationById() here because
+      // that would turn on isLoadingChat and cause the
+      // conversation UI to blink.
+      set((state) => {
+        if (!state.activeConversation) {
+          return state;
+        }
 
-      // Refresh active conversation details
-      await get().fetchConversationById(returnedConvId);
+        const currentMessages =
+          state.activeConversation.messages || [];
 
-      set({ isSending: false });
+        return {
+          activeConversation: {
+            ...state.activeConversation,
+            id: returnedConvId,
+            messages: [
+              ...currentMessages.filter(
+                (message) => message.id !== tempUserMsg.id
+              ),
+              {
+                ...tempUserMsg,
+                id: `user-${Date.now()}`,
+                conversationId: returnedConvId,
+              },
+              aiMsg,
+            ],
+          },
+        };
+      });
+
+      // Refresh only the sidebar conversation list.
+      // This uses isLoadingList, NOT isLoadingChat,
+      // so the chat window remains visible.
+      await get().fetchConversations();
+
+      set({
+        isSending: false,
+      });
+
       return returnedConvId;
     } catch (err: any) {
-      const errMsg = err.response?.data?.message || "Something went wrong while fetching the answer. Please try again.";
-      set({ isSending: false, error: errMsg });
+      const errMsg =
+        err.response?.data?.message ||
+        "Something went wrong while fetching the answer. Please try again.";
 
-      // Rollback or show error message as assistant failure note
+      set({
+        isSending: false,
+        error: errMsg,
+      });
+
+      // Remove the temporary user message if the request failed.
       if (activeConv) {
         set({
           activeConversation: {
             ...activeConv,
             messages: [
-              ...(activeConv.messages || []).filter((m) => m.id !== tempUserMsg.id),
+              ...(activeConv.messages || []).filter(
+                (message) => message.id !== tempUserMsg.id
+              ),
             ],
           },
         });
       }
+
       throw new Error(errMsg);
     }
   },
 
-  editAndResendMessage: async (messageId: string, content: string) => {
+  editAndResendMessage: async (
+    messageId: string,
+    content: string
+  ) => {
     const activeConv = get().activeConversation;
+
     if (!activeConv) return;
 
-    // Truncate messages in active conversation locally up to this message
+    // Keep messages before the edited message.
     const msgs = activeConv.messages || [];
-    const targetIdx = msgs.findIndex((m) => m.id === messageId);
-    const retained = targetIdx !== -1 ? msgs.slice(0, targetIdx) : [];
+
+    const targetIdx = msgs.findIndex(
+      (m) => m.id === messageId
+    );
+
+    const retained =
+      targetIdx !== -1
+        ? msgs.slice(0, targetIdx)
+        : [];
 
     const tempUserMsg: Message = {
       id: `temp-${Date.now()}`,
@@ -170,37 +263,98 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
     });
 
     try {
-      await conversationApi.editAndResend(activeConv.id, messageId, content);
+      await conversationApi.editAndResend(
+        activeConv.id,
+        messageId,
+        content
+      );
 
-      // Refresh list to update title if changed
+      // Update sidebar only.
       get().fetchConversations();
 
-      // Refresh active conversation to get the authoritative server messages
-      await get().fetchConversationById(activeConv.id);
-      set({ isSending: false });
+      // Do not use fetchConversationById() here.
+      // It would trigger isLoadingChat and cause
+      // the chat UI to blink.
+      await get().refreshActiveConversationSilently(
+        activeConv.id
+      );
+
+      set({
+        isSending: false,
+      });
     } catch (err: any) {
       const errMsg =
-        err.response?.data?.message || "Failed to edit and resend prompt. Please try again.";
-      set({ isSending: false, error: errMsg });
-      // Re-fetch previous conversation state
-      await get().fetchConversationById(activeConv.id);
+        err.response?.data?.message ||
+        "Failed to edit and resend prompt. Please try again.";
+
+      set({
+        isSending: false,
+        error: errMsg,
+      });
+
+      // Silently restore the authoritative conversation
+      // without showing the full-screen history loader.
+      await get().refreshActiveConversationSilently(
+        activeConv.id
+      );
+
       throw new Error(errMsg);
     }
   },
 
   deleteConversation: async (id: string) => {
     set({ error: null });
+
     try {
       await conversationApi.delete(id);
+
       set((state) => ({
-        conversations: state.conversations.filter((c) => c.id !== id),
-        activeConversation: state.activeConversation?.id === id ? null : state.activeConversation,
+        conversations: state.conversations.filter(
+          (c) => c.id !== id
+        ),
+
+        activeConversation:
+          state.activeConversation?.id === id
+            ? null
+            : state.activeConversation,
       }));
     } catch (err: any) {
-      set({ error: err.response?.data?.message || "Failed to delete conversation." });
+      set({
+        error:
+          err.response?.data?.message ||
+          "Failed to delete conversation.",
+      });
     }
   },
 
-  clearActiveConversation: () => set({ activeConversation: null }),
-  clearError: () => set({ error: null }),
+  clearActiveConversation: () => {
+    set({
+      activeConversation: null,
+    });
+  },
+
+  clearError: () => {
+    set({
+      error: null,
+    });
+  },
+
+  // Silent refresh helper.
+  // It fetches the latest conversation from the backend
+  // WITHOUT changing isLoadingChat.
+  refreshActiveConversationSilently: async (id: string) => {
+    try {
+      const res = await conversationApi.getOne(id);
+
+      set({
+        activeConversation: res.conversation,
+      });
+    } catch (err: any) {
+      set({
+        error:
+          err.response?.data?.message ||
+          "Failed to refresh conversation.",
+      });
+    }
+  },
 }));
