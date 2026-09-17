@@ -131,6 +131,17 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
           ],
         },
       });
+    } else {
+      set({
+        activeConversation: {
+          id: currentConvId || "temp-conv",
+          title: "New Conversation",
+          userId: "temp",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messages: [tempUserMsg],
+        },
+      });
     }
 
     // Only use isSending for the AI response
@@ -208,18 +219,17 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
       });
 
       // Remove the temporary user message if the request failed.
-      if (activeConv) {
-        set({
+      set((state) => {
+        if (!state.activeConversation) return state;
+        return {
           activeConversation: {
-            ...activeConv,
-            messages: [
-              ...(activeConv.messages || []).filter(
-                (message) => message.id !== tempUserMsg.id
-              ),
-            ],
+            ...state.activeConversation,
+            messages: (state.activeConversation.messages || []).filter(
+              (message) => message.id !== tempUserMsg.id
+            ),
           },
-        });
-      }
+        };
+      });
 
       throw new Error(errMsg);
     }
