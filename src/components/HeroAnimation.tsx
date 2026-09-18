@@ -1,6 +1,6 @@
 "use client";
 
-import { Lottie } from "lottie-react";
+import {Lottie} from "lottie-react";
 
 type HeroAnimationProps = {
   className?: string;
