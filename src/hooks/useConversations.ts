@@ -137,6 +137,7 @@ export const useConversationsStore = create<ConversationsState>((set, get) => ({
           id: currentConvId || "temp-conv",
           title: "New Conversation",
           userId: "temp",
+          status: "ACTIVE",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           messages: [tempUserMsg],
