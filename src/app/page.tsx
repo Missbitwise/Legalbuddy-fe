@@ -28,6 +28,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { buttonVariants } from "@/components/ui/Button";
+import { HeroAnimation } from "@/components/HeroAnimation";
 import { useAuthStore } from "@/hooks/useAuth";
 
 export default function LandingPage() {
@@ -242,13 +243,9 @@ export default function LandingPage() {
                     </div>
                   </div>
 
-                  {/* Photo */}
+                  {/* Hero animation */}
                   <div className="relative rounded-2xl overflow-hidden border border-blue-500/20 bg-[#060a14] shadow-inner">
-                    <img
-                      src="/images/hero-illustration.jpg"
-                      alt="AI Legal Assistant Interactive Query Interface"
-                      className="w-full h-auto object-cover block transition-transform duration-500 group-hover:scale-[1.01]"
-                    />
+                    <HeroAnimation className="transition-transform duration-500 group-hover:scale-[1.01]" />
 
                     <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-blue-400/20 pointer-events-none" />
                   </div>
